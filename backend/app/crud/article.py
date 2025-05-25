@@ -1,11 +1,21 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from typing import List, Optional
 import csv
 import io
 from uuid import UUID
 
-from app.core.exceptions import ArticleNotFoundError, DuplicateArticleError, DatabaseQueryError
+from app.core.exceptions import (
+    ArticleNotFoundError, 
+    DuplicateArticleError, 
+    DatabaseQueryError,
+    DatabaseConnectionError,
+    DatabaseIntegrityError,
+    InvalidParameterError,
+    ValidationError,
+    CsvProcessingError
+)
 from app.core.logging import get_logger
 from app.models import Article
 from app.schemas import ArticleCreate
@@ -15,28 +25,78 @@ class ArticleCRUD:
     """記事関連のCRUD操作"""
     logger = get_logger(__name__)
     async def get_by_uuid(self, db: AsyncSession, article_uuid: UUID) -> Optional[Article]:
-        """IDで記事を取得"""
-        self.logger.info(f"Retrieving article by uuid: {article_uuid}")
-        result = await db.execute(select(Article).filter(Article.article_uuid == article_uuid))
-        article =  result.scalar_one_or_none()
-        if article:
-            self.logger.info(f"Found article with uuid: {article_uuid}")
-        else:
-            self.logger.info(f"Article with uuid {article_uuid} not found")
-        return article
+        """UUIDで記事を取得"""
+        try:
+            # パラメータ検証
+            if not article_uuid:
+                self.logger.error("Article UUID is required")
+                raise InvalidParameterError("article_uuid", article_uuid, "記事UUIDが必要です")
+            
+            self.logger.info(f"Retrieving article by uuid: {article_uuid}")
+            
+            # データベース接続チェック
+            if not db.is_active:
+                self.logger.error("Database session is not active")
+                raise DatabaseConnectionError("データベースセッションがアクティブではありません")
+            
+            result = await db.execute(select(Article).filter(Article.article_uuid == article_uuid))
+            article = result.scalar_one_or_none()
+            
+            if article:
+                self.logger.info(f"Found article with uuid: {article_uuid}")
+            else:
+                self.logger.info(f"Article with uuid {article_uuid} not found")
+            
+            return article
+            
+        except InvalidParameterError:
+            raise
+        except DatabaseConnectionError:
+            raise
+        except SQLAlchemyError as e:
+            self.logger.error(f"Database error retrieving article by uuid {article_uuid}: {str(e)}")
+            raise DatabaseQueryError(f"記事UUID取得中にデータベースエラーが発生しました: {str(e)}") from e
+        except Exception as e:
+            self.logger.error(f"Unexpected error retrieving article by uuid {article_uuid}: {str(e)}")
+            raise DatabaseQueryError(f"記事UUID取得中に予期しないエラーが発生しました: {str(e)}") from e
     
     async def get_by_number(self, db: AsyncSession, article_number: str) -> Optional[Article]:
         """記事番号で記事を取得"""
-        self.logger.info(f"Retrieving article by article number: {article_number}")
-        result = await db.execute(
-            select(Article).where(Article.article_number == article_number)
-        )
-        article = result.scalar_one_or_none()
-        if article:
-            self.logger.info(f"Found article with article number: {article_number}")
-        else:
-            self.logger.info(f"Article with article number {article_number} not found")
-        return article
+        try:
+            # パラメータ検証
+            if not article_number or not article_number.strip():
+                self.logger.error("Article number is required and cannot be empty")
+                raise InvalidParameterError("article_number", article_number, "記事番号が必要です")
+            
+            self.logger.info(f"Retrieving article by article number: {article_number}")
+            
+            # データベース接続チェック
+            if not db.is_active:
+                self.logger.error("Database session is not active")
+                raise DatabaseConnectionError("データベースセッションがアクティブではありません")
+            
+            result = await db.execute(
+                select(Article).where(Article.article_number == article_number)
+            )
+            article = result.scalar_one_or_none()
+            
+            if article:
+                self.logger.info(f"Found article with article number: {article_number}")
+            else:
+                self.logger.info(f"Article with article number {article_number} not found")
+            
+            return article
+            
+        except InvalidParameterError:
+            raise
+        except DatabaseConnectionError:
+            raise
+        except SQLAlchemyError as e:
+            self.logger.error(f"Database error retrieving article by number {article_number}: {str(e)}")
+            raise DatabaseQueryError(f"記事番号取得中にデータベースエラーが発生しました: {str(e)}") from e
+        except Exception as e:
+            self.logger.error(f"Unexpected error retrieving article by number {article_number}: {str(e)}")
+            raise DatabaseQueryError(f"記事番号取得中に予期しないエラーが発生しました: {str(e)}") from e
     
     async def get_multi(
         self, 

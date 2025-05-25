@@ -170,8 +170,64 @@ class InvalidKnowledgeStatusError(ValidationError):
         }
         super().__init__(message=message, details=details, error_code="INVALID_KNOWLEDGE_STATUS")
 
-class DatabaseQueryError(Exception):
+class DatabaseQueryError(DatabaseError):
     """データベースクエリ実行エラー"""
-    def __init__(self, message: str = "Database query execution error"):
-        self.message = message
-        super().__init__(self.message)
+    def __init__(self, message: str = "Database query execution error", details: Optional[Dict[str, Any]] = None):
+        super().__init__(message=message, details=details, error_code="DATABASE_QUERY_ERROR")
+
+
+class DatabaseConnectionError(DatabaseError):
+    """データベース接続エラー"""
+    def __init__(self, message: str = "Database connection error"):
+        super().__init__(message=message, error_code="DATABASE_CONNECTION_ERROR")
+
+
+class DatabaseIntegrityError(DatabaseError):
+    """データベース整合性エラー"""
+    def __init__(self, message: str, constraint: Optional[str] = None):
+        details = {"constraint": constraint} if constraint else {}
+        super().__init__(message=message, details=details, error_code="DATABASE_INTEGRITY_ERROR")
+
+
+class TokenNotFoundError(NotFoundError):
+    """トークンが見つからないエラー"""
+    def __init__(self, token_type: str = "token"):
+        message = f"{token_type}が見つかりません"
+        details = {"token_type": token_type}
+        super().__init__(message=message, details=details, error_code="TOKEN_NOT_FOUND")
+
+
+class ExpiredTokenError(AuthenticationError):
+    """期限切れトークンエラー"""
+    def __init__(self, token_type: str = "token"):
+        message = f"{token_type}の有効期限が切れています"
+        details = {"token_type": token_type}
+        super().__init__(message=message, details=details, error_code="EXPIRED_TOKEN")
+
+
+class InvalidParameterError(ValidationError):
+    """無効なパラメータエラー"""
+    def __init__(self, parameter: str, value: Any, reason: str):
+        message = f"パラメータ '{parameter}' の値 '{value}' が無効です: {reason}"
+        details = {"parameter": parameter, "value": value, "reason": reason}
+        super().__init__(message=message, details=details, error_code="INVALID_PARAMETER")
+
+
+class CsvProcessingError(KnowledgeBaseException):
+    """CSV処理エラー"""
+    def __init__(self, row_number: Optional[int] = None, reason: str = "CSV processing failed"):
+        if row_number:
+            message = f"CSV行 {row_number} の処理中にエラーが発生しました: {reason}"
+            details = {"row_number": row_number, "reason": reason}
+        else:
+            message = f"CSV処理中にエラーが発生しました: {reason}"
+            details = {"reason": reason}
+        super().__init__(message=message, details=details, error_code="CSV_PROCESSING_ERROR")
+
+
+class ResourceLockError(KnowledgeBaseException):
+    """リソースロックエラー"""
+    def __init__(self, resource_type: str, resource_id: str):
+        message = f"{resource_type} '{resource_id}' は他のプロセスによってロックされています"
+        details = {"resource_type": resource_type, "resource_id": resource_id}
+        super().__init__(message=message, details=details, error_code="RESOURCE_LOCK_ERROR")
