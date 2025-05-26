@@ -16,3 +16,13 @@ class TokenResponse(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+class RefreshTokenCreate(BaseModel):
+    token: str
+    user_id: int
+    expires_at: datetime
+
+class TokenBlacklistCreate(BaseModel):
+    token: str
+    user_id: int
+    expires_at: datetime

@@ -31,7 +31,9 @@ from .knowledge import (
 from .token import (
     Token,
     TokenResponse,
-    RefreshTokenRequest
+    RefreshTokenRequest,
+    RefreshTokenCreate,
+    TokenBlacklistCreate
 )
 
 __all__ = [
@@ -61,5 +63,7 @@ __all__ = [
     # Token schemas
     "Token",
     "TokenResponse",
-    "RefreshTokenRequest"
+    "RefreshTokenRequest",
+    "RefreshTokenCreate",
+    "TokenBlacklistCreate"
 ]

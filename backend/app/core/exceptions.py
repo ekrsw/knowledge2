@@ -231,3 +231,42 @@ class ResourceLockError(KnowledgeBaseException):
         message = f"{resource_type} '{resource_id}' は他のプロセスによってロックされています"
         details = {"resource_type": resource_type, "resource_id": resource_id}
         super().__init__(message=message, details=details, error_code="RESOURCE_LOCK_ERROR")
+
+
+# テストで使用する追加の例外クラス
+class PermissionDeniedError(AuthorizationError):
+    """権限拒否エラー"""
+    def __init__(self, message: str = "権限が拒否されました"):
+        super().__init__(message=message, error_code="PERMISSION_DENIED")
+
+
+class InvalidStatusTransitionError(ValidationError):
+    """無効なステータス遷移エラー"""
+    def __init__(self, current_status: str, target_status: str):
+        message = f"ステータス '{current_status}' から '{target_status}' への遷移は無効です"
+        details = {"current_status": current_status, "target_status": target_status}
+        super().__init__(message=message, details=details, error_code="INVALID_STATUS_TRANSITION")
+
+
+class RefreshTokenNotFoundError(NotFoundError):
+    """リフレッシュトークンが見つからないエラー"""
+    def __init__(self, token: Optional[str] = None):
+        if token:
+            message = f"リフレッシュトークン '{token}' が見つかりません"
+            details = {"token": token}
+        else:
+            message = "リフレッシュトークンが見つかりません"
+            details = {}
+        super().__init__(message=message, details=details, error_code="REFRESH_TOKEN_NOT_FOUND")
+
+
+class TokenBlacklistNotFoundError(NotFoundError):
+    """トークンブラックリストエントリが見つからないエラー"""
+    def __init__(self, jti: Optional[str] = None):
+        if jti:
+            message = f"JTI '{jti}' のブラックリストエントリが見つかりません"
+            details = {"jti": jti}
+        else:
+            message = "ブラックリストエントリが見つかりません"
+            details = {}
+        super().__init__(message=message, details=details, error_code="TOKEN_BLACKLIST_NOT_FOUND")
