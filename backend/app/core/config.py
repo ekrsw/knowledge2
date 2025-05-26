@@ -24,8 +24,9 @@ class Settings(BaseSettings):
     TZ: str = "Asia/Tokyo"
 
     # セキュリティ設定
-    SECRET_KEY: str = "your-secret-key-change-in-production"
-    ALGORITHM: str = "HS256"
+    ALGORITHM: str = "RS256"
+    PRIVATE_KEY_PATH: str = "keys/private.pem"  # 秘密鍵のパス
+    PUBLIC_KEY_PATH: str = "keys/public.pem"   # 公開鍵のパス
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     TOKEN_BLACKLIST_ENABLED: bool = True
