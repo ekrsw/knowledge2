@@ -9,3 +9,6 @@ __pycache__/
 
 # Mac関連
 .DS_Store
+
+# セキュリティ
+keys/private.pem
