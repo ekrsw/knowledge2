@@ -20,15 +20,7 @@ from app.models.knowledge import StatusEnum, ChangeTypeEnum
 # テスト用のインメモリSQLiteデータベース設定
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
-@pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    """セッションスコープのイベントループ"""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def test_engine():
     """テスト用データベースエンジン"""
     engine = create_async_engine(
@@ -65,7 +57,11 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
             yield session
         finally:
             # テスト後にロールバック
-            await transaction.rollback()
+            try:
+                await transaction.rollback()
+            except Exception:
+                # トランザクションが既に閉じられている場合は無視
+                pass
 
 
 @pytest_asyncio.fixture
@@ -218,6 +214,29 @@ class TestDataFactory:
         }
         defaults.update(kwargs)
         return KnowledgeCreate(**defaults)
+    
+    @staticmethod
+    def create_refresh_token_data(**kwargs):
+        """リフレッシュトークン作成データ"""
+        from app.schemas import RefreshTokenCreate
+        defaults = {
+            "token": f"refresh_token_{uuid4().hex[:16]}",
+            "user_id": uuid4(),
+            "expires_at": datetime.utcnow() + timedelta(days=7)
+        }
+        defaults.update(kwargs)
+        return RefreshTokenCreate(**defaults)
+    
+    @staticmethod
+    def create_token_blacklist_data(**kwargs):
+        """トークンブラックリスト作成データ"""
+        from app.schemas import TokenBlacklistCreate
+        defaults = {
+            "jti": f"jti_{uuid4().hex[:16]}",
+            "expires_at": datetime.utcnow() + timedelta(hours=1)
+        }
+        defaults.update(kwargs)
+        return TokenBlacklistCreate(**defaults)
 
 
 @pytest.fixture
@@ -302,3 +321,23 @@ async def multiple_knowledge(db_session: AsyncSession, sample_user: User, multip
         await db_session.refresh(knowledge)
     
     return knowledge_list
+
+
+@pytest_asyncio.fixture
+async def multiple_refresh_tokens(db_session: AsyncSession, sample_user: User) -> list[RefreshToken]:
+    """複数のリフレッシュトークンを作成"""
+    tokens = []
+    for i in range(5):
+        token = RefreshToken(
+            token=f"test_refresh_token_{i}_{uuid4().hex[:8]}",
+            user_id=sample_user.id,
+            expires_at=datetime.utcnow() + timedelta(days=7 + i)
+        )
+        db_session.add(token)
+        tokens.append(token)
+    
+    await db_session.flush()
+    for token in tokens:
+        await db_session.refresh(token)
+    
+    return tokens

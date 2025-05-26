@@ -24,6 +24,167 @@ class RefreshTokenCRUD:
     def __init__(self):
         self.logger = get_logger(__name__)
     
+    async def get(self, db: AsyncSession, token_id: UUID) -> RefreshToken:
+        """IDでリフレッシュトークンを取得"""
+        try:
+            # パラメータ検証
+            if not token_id:
+                self.logger.error("Token ID is required for refresh token retrieval")
+                raise InvalidParameterError("token_id", token_id, "トークンIDが必要です")
+            
+            self.logger.info(f"Retrieving refresh token by id: {token_id}")
+            
+            # データベース接続チェック
+            if not db.is_active:
+                self.logger.error("Database session is not active")
+                raise DatabaseConnectionError("データベースセッションがアクティブではありません")
+            
+            result = await db.execute(
+                select(RefreshToken).where(RefreshToken.id == token_id)
+            )
+            refresh_token = result.scalar_one_or_none()
+            
+            if not refresh_token:
+                self.logger.info(f"Refresh token with id {token_id} not found")
+                raise TokenNotFoundError(f"リフレッシュトークン (ID: {token_id})")
+            
+            # 有効期限チェック
+            if refresh_token.expires_at <= datetime.utcnow():
+                self.logger.warning("Refresh token has expired")
+                raise ExpiredTokenError("リフレッシュトークン")
+            
+            self.logger.info(f"Found valid refresh token with id: {token_id}")
+            return refresh_token
+            
+        except (InvalidParameterError, DatabaseConnectionError, TokenNotFoundError, ExpiredTokenError):
+            raise
+        except SQLAlchemyError as e:
+            self.logger.error(f"Database error retrieving refresh token: {str(e)}")
+            raise DatabaseQueryError(f"リフレッシュトークン取得中にデータベースエラーが発生しました: {str(e)}") from e
+        except Exception as e:
+            self.logger.error(f"Unexpected error retrieving refresh token: {str(e)}")
+            raise DatabaseQueryError(f"リフレッシュトークン取得中に予期しないエラーが発生しました: {str(e)}") from e
+    
+    async def create(self, db: AsyncSession, token_data) -> RefreshToken:
+        """リフレッシュトークンを作成（スキーマオブジェクトから）"""
+        return await self.create_refresh_token(
+            db=db,
+            token=token_data.token,
+            user_id=token_data.user_id,
+            expires_at=token_data.expires_at
+        )
+    
+    async def delete(self, db: AsyncSession, token_id: UUID) -> bool:
+        """IDでリフレッシュトークンを削除"""
+        try:
+            # パラメータ検証
+            if not token_id:
+                self.logger.error("Token ID is required for refresh token deletion")
+                raise InvalidParameterError("token_id", token_id, "トークンIDが必要です")
+            
+            self.logger.info(f"Deleting refresh token by id: {token_id}")
+            
+            # データベース接続チェック
+            if not db.is_active:
+                self.logger.error("Database session is not active")
+                raise DatabaseConnectionError("データベースセッションがアクティブではありません")
+            
+            result = await db.execute(
+                delete(RefreshToken).where(RefreshToken.id == token_id)
+            )
+            await db.flush()
+            
+            deleted_count = result.rowcount
+            if deleted_count > 0:
+                self.logger.info(f"Successfully deleted refresh token with id: {token_id}")
+            else:
+                self.logger.info(f"No refresh token found with id: {token_id}")
+            
+            return deleted_count > 0
+            
+        except (InvalidParameterError, DatabaseConnectionError):
+            raise
+        except SQLAlchemyError as e:
+            self.logger.error(f"Database error deleting refresh token: {str(e)}")
+            raise DatabaseQueryError(f"リフレッシュトークン削除中にデータベースエラーが発生しました: {str(e)}") from e
+        except Exception as e:
+            self.logger.error(f"Unexpected error deleting refresh token: {str(e)}")
+            raise DatabaseQueryError(f"リフレッシュトークン削除中に予期しないエラーが発生しました: {str(e)}") from e
+    
+    async def get_by_user_id(self, db: AsyncSession, user_id: UUID) -> list[RefreshToken]:
+        """ユーザーIDでリフレッシュトークンを取得"""
+        try:
+            # パラメータ検証
+            if not user_id:
+                self.logger.error("User ID is required for refresh token retrieval")
+                raise InvalidParameterError("user_id", user_id, "ユーザーIDが必要です")
+            
+            self.logger.info(f"Retrieving refresh tokens for user: {user_id}")
+            
+            # データベース接続チェック
+            if not db.is_active:
+                self.logger.error("Database session is not active")
+                raise DatabaseConnectionError("データベースセッションがアクティブではありません")
+            
+            result = await db.execute(
+                select(RefreshToken).where(RefreshToken.user_id == user_id)
+            )
+            refresh_tokens = result.scalars().all()
+            
+            # 有効期限チェックして有効なトークンのみ返す
+            valid_tokens = []
+            current_time = datetime.utcnow()
+            for token in refresh_tokens:
+                if token.expires_at > current_time:
+                    valid_tokens.append(token)
+            
+            self.logger.info(f"Found {len(valid_tokens)} valid refresh tokens for user {user_id}")
+            return valid_tokens
+            
+        except (InvalidParameterError, DatabaseConnectionError):
+            raise
+        except SQLAlchemyError as e:
+            self.logger.error(f"Database error retrieving refresh tokens: {str(e)}")
+            raise DatabaseQueryError(f"リフレッシュトークン取得中にデータベースエラーが発生しました: {str(e)}") from e
+        except Exception as e:
+            self.logger.error(f"Unexpected error retrieving refresh tokens: {str(e)}")
+            raise DatabaseQueryError(f"リフレッシュトークン取得中に予期しないエラーが発生しました: {str(e)}") from e
+    
+    async def delete_by_token(self, db: AsyncSession, token: str) -> bool:
+        """トークン文字列でリフレッシュトークンを削除"""
+        return await self.delete_refresh_token(db, token)
+    
+    async def delete_by_user_id(self, db: AsyncSession, user_id: UUID) -> int:
+        """ユーザーIDでリフレッシュトークンを削除"""
+        return await self.delete_user_tokens(db, user_id)
+    
+    async def is_token_valid(self, db: AsyncSession, token: str) -> bool:
+        """トークンの有効性をチェック"""
+        try:
+            # パラメータ検証
+            if not token or not token.strip():
+                self.logger.error("Token is required for token validation")
+                raise InvalidParameterError("token", "[HIDDEN]", "トークンが必要です")
+            
+            self.logger.info("Validating refresh token")
+            
+            # データベース接続チェック
+            if not db.is_active:
+                self.logger.error("Database session is not active")
+                raise DatabaseConnectionError("データベースセッションがアクティブではありません")
+            
+            try:
+                refresh_token = await self.get_by_token(db, token)
+                return refresh_token is not None
+            except (TokenNotFoundError, ExpiredTokenError):
+                return False
+            
+        except (InvalidParameterError, DatabaseConnectionError):
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error validating token: {str(e)}")
+            return False
+    
     async def create_refresh_token(
         self, 
         db: AsyncSession, 
@@ -56,6 +217,14 @@ class RefreshTokenCRUD:
             if not db.is_active:
                 self.logger.error("Database session is not active")
                 raise DatabaseConnectionError("データベースセッションがアクティブではありません")
+            
+            # ユーザーの存在確認
+            from app.models import User
+            user_result = await db.execute(select(User).where(User.id == user_id))
+            user = user_result.scalar_one_or_none()
+            if not user:
+                self.logger.error(f"User with id {user_id} does not exist")
+                raise ValidationError(f"ユーザーID {user_id} が存在しません")
             
             db_token = RefreshToken(
                 token=token,

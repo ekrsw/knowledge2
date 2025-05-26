@@ -19,10 +19,9 @@ class RefreshTokenRequest(BaseModel):
 
 class RefreshTokenCreate(BaseModel):
     token: str
-    user_id: int
+    user_id: UUID
     expires_at: datetime
 
 class TokenBlacklistCreate(BaseModel):
-    token: str
-    user_id: int
+    jti: str
     expires_at: datetime
