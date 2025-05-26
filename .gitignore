@@ -11,4 +11,4 @@ __pycache__/
 .DS_Store
 
 # セキュリティ
-keys/private.pem
+backend/keys/private.pem
