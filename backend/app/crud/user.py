@@ -29,8 +29,8 @@ class UserCRUD:
         try:
             # パラメータ検証
             if not id:
-                self.logger.error("User ID is required")
-                raise InvalidParameterError("id", id, "IDが必要です")
+                self.logger.error("ユーザーIDが必要です")
+                raise InvalidParameterError("id", id, "ユーザーIDが必要です")
             
             self.logger.info(f"Retrieving user by id: {id}")
             

@@ -16,6 +16,7 @@ from app.core.exceptions import (
 )
 from app.core.logging import get_logger
 from app.models import RefreshToken
+from app.schemas.token import RefreshTokenCreate
 
 
 class RefreshTokenCRUD:
@@ -65,7 +66,7 @@ class RefreshTokenCRUD:
             self.logger.error(f"Unexpected error retrieving refresh token: {str(e)}")
             raise DatabaseQueryError(f"リフレッシュトークン取得中に予期しないエラーが発生しました: {str(e)}") from e
     
-    async def create(self, db: AsyncSession, token_data) -> RefreshToken:
+    async def create(self, db: AsyncSession, token_data: RefreshTokenCreate) -> RefreshToken:
         """リフレッシュトークンを作成（スキーマオブジェクトから）"""
         return await self.create_refresh_token(
             db=db,

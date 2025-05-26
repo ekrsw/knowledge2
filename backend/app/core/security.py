@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.logging import app_logger
 from app.db.session import get_async_session
+from app.schemas.token import RefreshTokenCreate
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -144,12 +145,12 @@ async def verify_token(token: str) -> Optional[Dict[str, Any]]:
     except JWTError:
         return None
 
-async def create_refresh_token(auth_user_id: str, db: AsyncSession) -> str:
+async def create_refresh_token(user_id: uuid.UUID, db: AsyncSession) -> str:
     """
     リフレッシュトークンを作成し、SQLiteに保存する関数
     
     Args:
-        auth_user_id: ユーザーID
+        user_id: ユーザーID
         db: データベースセッション
         
     Returns:
@@ -159,20 +160,19 @@ async def create_refresh_token(auth_user_id: str, db: AsyncSession) -> str:
     token = secrets.token_urlsafe(32)
     
     # 有効期限を計算
-    expires_at = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    expires_at = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     
+    # token_dataを作成
+    token_data = RefreshTokenCreate(
+        token=token,
+        user_id=user_id,
+        expires_at=expires_at
+        )
+
     # SQLiteに保存
     try:
-        # UUIDに変換（user_idがUUID形式の場合）
-        user_uuid = uuid.UUID(auth_user_id)
-        
         from app.crud.refresh_token import refresh_token_crud
-        await refresh_token_crud.create_refresh_token(
-            db=db,
-            token=token,
-            user_id=user_uuid,
-            expires_at=expires_at
-        )
+        await refresh_token_crud.create(db=db, token_data=token_data)
         
         return token
     except Exception as e:

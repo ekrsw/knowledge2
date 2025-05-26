@@ -1,147 +1,182 @@
-from app.crud.user import user_crud
-from app.crud.knowledge import knowledge_crud
-from app.models.user import User
-from app.models.knowledge import ChangeTypeEnum, StatusEnum
-from app.schemas.user import UserCreate, UserUpdate
-from app.schemas.knowledge import Knowledge, KnowledgeCreate, KnowledgeUpdate
-from app.db.session import get_async_session
+from contextlib import asynccontextmanager
+import os
+import time
+import uuid
+
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.api.v1.api import api_router
+from app.core.config import settings
+from app.core.logging import app_logger, get_request_logger
+from app.core.exceptions import KnowledgeBaseException
 from app.db.init import Database
-from app.core.exceptions import UserNotFoundError, KnowledgeNotFoundError
-import asyncio
-from datetime import date
 
-async def main():
-    # データベースの初期化
-    db_manager = Database()
-    await db_manager.init()
-    
-    # ユーザー作成
-    async for db in get_async_session():
-        user_obj_in = UserCreate(
-            username="test_user",
-            full_name="テストユーザー",
-            password="password123"
-        )
-        new_user = await user_crud.create(db, user_obj_in)
-        user_id = new_user.id  # IDを保存
-        print(f"Created user: {new_user.username}")
-        break
 
-    # ユーザー更新
-    async for db in get_async_session():
-        db_obj = await user_crud.get(db, user_id)
-        obj_in = UserUpdate(
-            username="new_username"
-        )
-        updated_user = await user_crud.update(db, db_obj, obj_in)
-        print(f"Updated user: {updated_user.username}")
-        updated_user_from_db = await user_crud.get(db, user_id)
-        print(f"User from DB: {updated_user_from_db.username}")
-        break
+# ログディレクトリの作成（ファイルログが有効な場合）
+if settings.LOG_TO_FILE:
+    log_dir = os.path.dirname(settings.LOG_FILE_PATH)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
 
-    print("\n=== Knowledge CRUD Operations ===")
-    
-    # Knowledge作成
-    async for db in get_async_session():
-        knowledge_obj_in = KnowledgeCreate(
-            article_number="KBA-00001-TEST",
-            change_type=ChangeTypeEnum.modify,
-            title="テストナレッジ",
-            info_category="技術情報",
-            keywords="Python, FastAPI, SQLAlchemy",
-            importance=True,
-            target="開発者",
-            open_publish_start=date(2024, 1, 1),
-            open_publish_end=date(2024, 12, 31),
-            question="FastAPIでの非同期処理について",
-            answer="async/awaitを使用して非同期処理を実装します。",
-            add_comments="追加のコメント",
-            remarks="備考欄"
-        )
-        new_knowledge = await knowledge_crud.create(db, knowledge_obj_in, user_id)
-        knowledge_id = new_knowledge.id  # IDを保存
-        print(f"Created knowledge: {new_knowledge.title}")
-        print(f"Knowledge ID: {knowledge_id}")
-        print(f"Status: {new_knowledge.status}")
-        break
 
-    # Knowledge取得
-    async for db in get_async_session():
-        retrieved_knowledge = await knowledge_crud.get(db, knowledge_id)
-        print(f"Retrieved knowledge: {retrieved_knowledge.title}")
-        print(f"Author: {retrieved_knowledge.author.username}")
-        print(f"Article Number: {retrieved_knowledge.article_number}")
-        break
-
-    # Knowledge更新
-    async for db in get_async_session():
-        knowledge_db_obj = await knowledge_crud.get(db, knowledge_id)
-        knowledge_update_obj = KnowledgeUpdate(
-            title="更新されたテストナレッジ",
-            info_category="更新された技術情報",
-            importance=False
-        )
-        updated_knowledge = await knowledge_crud.update(db, knowledge_db_obj, knowledge_update_obj)
-        print(f"Updated knowledge: {updated_knowledge.title}")
-        print(f"Updated importance: {updated_knowledge.importance}")
-        break
-
-    # Knowledgeステータス更新
-    async for db in get_async_session():
-        knowledge_db_obj = await knowledge_crud.get(db, knowledge_id)
-        user_obj = await user_crud.get(db, user_id)
-        status_updated_knowledge = await knowledge_crud.update_status(
-            db, knowledge_db_obj, StatusEnum.submitted, user_obj
-        )
-        print(f"Status updated to: {status_updated_knowledge.status}")
-        print(f"Submitted at: {status_updated_knowledge.submitted_at}")
-        break
-
-    # Knowledge一覧取得
-    async for db in get_async_session():
-        knowledge_list = await knowledge_crud.get_multi(db, skip=0, limit=10)
-        print(f"Total knowledge items: {len(knowledge_list)}")
-        for knowledge in knowledge_list:
-            print(f"- {knowledge.title} (Status: {knowledge.status})")
-        break
-
-    # ユーザー削除
-    async for db in get_async_session():
-        await user_crud.delete(db, user_id)
-        print("User deleted")
-        break
-
-    # Knowledge削除
-    async for db in get_async_session():
-        # 注意: ユーザーが削除されているため、この操作は失敗する可能性があります
-        # 実際のアプリケーションでは、外部キー制約を適切に設定する必要があります
-        try:
-            deleted = await knowledge_crud.delete(db, knowledge_id, user_id)
-            if deleted:
-                print("Knowledge deleted successfully")
-            else:
-                print("Knowledge deletion failed")
-        except Exception as e:
-            print(f"Knowledge deletion error: {e}")
-        break
-
-    # 削除確認
-    async for db in get_async_session():
-        try:
-            existing_user = await user_crud.get(db, user_id)
-            print(existing_user.username)
-        except UserNotFoundError:
-            print("OK - User not found after deletion")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """アプリケーションのライフサイクルを管理"""
+    # 起動の処理
+    try:
+        # データベース初期化
+        db = Database()
+        await db.init()
+        app_logger.info("Database initialized successfully")
         
-        try:
-            existing_knowledge = await knowledge_crud.get(db, knowledge_id)
-            print(f"Knowledge still exists: {existing_knowledge.title}")
-        except KnowledgeNotFoundError:
-            print("OK - Knowledge not found after deletion")
-        except Exception as e:
-            print(f"Knowledge check error: {e}")
-        break
+    except Exception as e:
+        app_logger.error(f"Initialization failed: {str(e)}")
+        raise
+    
+    yield  # アプリケーションの実行中
+
+    # シャットダウンの処理
+    app_logger.info("Shutting down application...")
+    
+    try:
+        await db.close()
+        app_logger.info("Database connections closed")
+    except Exception as e:
+        app_logger.error(f"Error closing database connections: {str(e)}")
+
+
+# FastAPIアプリケーションの作成
+app = FastAPI(
+    title=settings.APP_NAME,
+    description="ナレッジ投稿システムAPI",
+    version=settings.APP_VERSION,
+    lifespan=lifespan
+)
+
+# CORSミドルウェアの設定
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=settings.CORS_ALLOW_METHODS,
+    allow_headers=settings.CORS_ALLOW_HEADERS,
+)
+
+
+# リクエストIDとロギングミドルウェア
+@app.middleware("http")
+async def request_middleware(request: Request, call_next):
+    # リクエストIDを生成
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+
+    # リクエストロガーの取得
+    logger = get_request_logger(request)
+
+    # リクエスト情報のロギング
+    logger.info(
+        f"Request started: {request.method} {request.url.path} "
+        f"(Client: {request.client.host if request.client else 'unknown'})"
+    )
+
+    # 処理時間の計測
+    start_time = time.time()
+
+    try:
+        # リクエスト処理
+        response = await call_next(request)
+        process_time = time.time() - start_time
+
+        # レスポンスヘッダーの設定
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Process-Time"] = str(process_time)
+
+        # レスポンス情報のロギング
+        logger.info(
+            f"Request completed: {request.method} {request.url.path} "
+            f"Status: {response.status_code} "
+            f"Process time: {process_time:.3f}s"
+        )
+
+        return response
+    except Exception as e:
+        # 例外発生時のロギング
+        process_time = time.time() - start_time
+        logger.error(
+            f"Request failed: {request.method} {request.url.path} "
+            f"Error: {str(e)} "
+            f"Process time: {process_time:.3f}s",
+            exc_info=True
+        )
+        raise
+
+
+# カスタム例外ハンドラー
+@app.exception_handler(KnowledgeBaseException)
+async def knowledge_base_exception_handler(request: Request, exc: KnowledgeBaseException):
+    logger = get_request_logger(request)
+    logger.warning(f"Business logic error: {exc.message}")
+    
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={
+            "detail": exc.message,
+            "error_code": exc.error_code,
+            "details": exc.details
+        },
+    )
+
+
+# バリデーションエラーハンドラー
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger = get_request_logger(request)
+    
+    # エラー情報の処理
+    errors = []
+    for error in exc.errors():
+        processed_error = error.copy()
+        if 'ctx' in processed_error and 'error' in processed_error['ctx']:
+            if isinstance(processed_error['ctx']['error'], ValueError):
+                processed_error['ctx']['error'] = str(processed_error['ctx']['error'])
+        errors.append(processed_error)
+    
+    logger.warning(f"Validation error: {request.method} {request.url.path} Errors: {errors}")
+    
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": errors, "body": exc.body},
+    )
+
+
+# APIルーターの登録
+app.include_router(api_router, prefix="/api/v1")
+
+# ルートエンドポイント
+@app.get("/")
+async def root():
+    return {
+        "message": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "docs_url": "/docs"
+    }
+
+# ヘルスチェックエンドポイント
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import uvicorn
+    
+    # アプリケーション起動時のログ
+    app_logger.info(
+        f"Starting {settings.APP_NAME} in {settings.ENVIRONMENT} mode "
+        f"(Log level: {settings.LOG_LEVEL})"
+    )
+    
+    uvicorn.run(app, host="0.0.0.0", port=8000)
