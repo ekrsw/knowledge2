@@ -32,6 +32,7 @@ from .token import (
     Token,
     TokenResponse,
     RefreshTokenRequest,
+    LogoutRequest,
     RefreshTokenCreate,
     TokenBlacklistCreate
 )
@@ -64,6 +65,7 @@ __all__ = [
     "Token",
     "TokenResponse",
     "RefreshTokenRequest",
+    "LogoutRequest",
     "RefreshTokenCreate",
     "TokenBlacklistCreate"
 ]

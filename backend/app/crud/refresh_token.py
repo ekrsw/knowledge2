@@ -83,8 +83,6 @@ class RefreshTokenCRUD:
                 self.logger.error("Token ID is required for refresh token deletion")
                 raise InvalidParameterError("token_id", token_id, "トークンIDが必要です")
             
-            self.logger.info(f"Deleting refresh token by id: {token_id}")
-            
             # データベース接続チェック
             if not db.is_active:
                 self.logger.error("Database session is not active")
@@ -96,11 +94,6 @@ class RefreshTokenCRUD:
             await db.flush()
             
             deleted_count = result.rowcount
-            if deleted_count > 0:
-                self.logger.info(f"Successfully deleted refresh token with id: {token_id}")
-            else:
-                self.logger.info(f"No refresh token found with id: {token_id}")
-            
             return deleted_count > 0
             
         except (InvalidParameterError, DatabaseConnectionError):
@@ -212,8 +205,6 @@ class RefreshTokenCRUD:
                 self.logger.error("Expiration time must be in the future")
                 raise ValidationError("有効期限は未来の時刻である必要があります")
             
-            self.logger.info(f"Creating refresh token for user: {user_id}")
-            
             # データベース接続チェック
             if not db.is_active:
                 self.logger.error("Database session is not active")
@@ -237,7 +228,6 @@ class RefreshTokenCRUD:
             await db.flush()
             await db.refresh(db_token)
             
-            self.logger.info(f"Successfully created refresh token with id: {db_token.id}")
             return db_token
             
         except (InvalidParameterError, ValidationError, DatabaseConnectionError):
@@ -301,7 +291,6 @@ class RefreshTokenCRUD:
                 self.logger.error("Token is required for refresh token deletion")
                 raise InvalidParameterError("token", "[HIDDEN]", "トークンが必要です")
             
-            self.logger.info("Deleting refresh token")
             
             # データベース接続チェック
             if not db.is_active:
@@ -314,11 +303,6 @@ class RefreshTokenCRUD:
             await db.flush()
             
             deleted_count = result.rowcount
-            if deleted_count > 0:
-                self.logger.info(f"Successfully deleted {deleted_count} refresh token(s)")
-            else:
-                self.logger.info("No refresh token found to delete")
-            
             return deleted_count > 0
             
         except (InvalidParameterError, DatabaseConnectionError):

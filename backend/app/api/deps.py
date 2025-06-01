@@ -2,6 +2,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import AsyncGenerator
+import uuid
 
 from app.core.exceptions import InvalidTokenError, UserNotFoundError
 from app.db.session import get_async_session
@@ -42,7 +43,7 @@ async def get_current_user(
         )
     
     try:
-        user = await user_crud.get(db, id=user_id)
+        user = await user_crud.get(db, id=uuid.UUID(user_id))
         if user is None:
             raise UserNotFoundError(user_id=user_id)
         return user

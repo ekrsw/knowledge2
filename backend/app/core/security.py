@@ -44,6 +44,11 @@ async def create_access_token(data: Dict[str, Any], expires_delta: Optional[time
     
     to_encode.update({"exp": expire})
     
+    # 秘密鍵の存在を確認
+    if not settings.PRIVATE_KEY:
+        app_logger.error("秘密鍵が設定されていません")
+        raise ValueError("秘密鍵が設定されていません")
+    
     # 秘密鍵を使用してトークンを署名
     encoded_jwt = jwt.encode(
         to_encode, 
@@ -125,6 +130,9 @@ async def verify_token(token: str) -> Optional[Dict[str, Any]]:
     """
     try:
         # 公開鍵を使用してトークンを検証
+        if not settings.PUBLIC_KEY:
+            app_logger.error("公開鍵が設定されていません")
+            raise ValueError("公開鍵が設定されていません")
         payload = jwt.decode(token,
                              settings.PUBLIC_KEY,
                              algorithms=[settings.ALGORITHM]
@@ -203,7 +211,7 @@ async def verify_refresh_token(token: str, db: AsyncSession) -> Optional[str]:
         
         # ユーザーIDを文字列として返す
         return str(refresh_token.user_id)
-        
+    
     except Exception as e:
         if "ExpiredTokenError" in str(type(e).__name__):
             app_logger.warning(f"リフレッシュトークンの有効期限切れ")

@@ -80,11 +80,10 @@ class TokenBlacklistCRUD:
                 self.logger.error("Expiration time is required for blacklist entry creation")
                 raise InvalidParameterError("expires_at", expires_at, "有効期限が必要です")
             
-            if expires_at <= datetime.utcnow():
+            now = datetime.now(expires_at.tzinfo) if expires_at.tzinfo else datetime.utcnow()
+            if expires_at <= now:
                 self.logger.error("Expiration time must be in the future")
                 raise ValidationError("有効期限は未来の時刻である必要があります")
-            
-            self.logger.info(f"Creating blacklist entry for JTI: {jti[:8]}...")
             
             # データベース接続チェック
             if not db.is_active:
@@ -100,7 +99,6 @@ class TokenBlacklistCRUD:
             await db.flush()
             await db.refresh(db_entry)
             
-            self.logger.info(f"Successfully created blacklist entry with id: {db_entry.id}")
             return db_entry
             
         except IntegrityError:
@@ -160,7 +158,6 @@ class TokenBlacklistCRUD:
                 self.logger.error("JTI is required for blacklist check")
                 raise InvalidParameterError("jti", jti, "JTIが必要です")
             
-            self.logger.info(f"Checking if JTI is blacklisted: {jti[:8]}...")
             
             # データベース接続チェック
             if not db.is_active:
@@ -175,11 +172,6 @@ class TokenBlacklistCRUD:
                 )
             )
             is_blacklisted = result.scalar_one_or_none() is not None
-            
-            if is_blacklisted:
-                self.logger.warning(f"JTI {jti[:8]}... is blacklisted")
-            else:
-                self.logger.info(f"JTI {jti[:8]}... is not blacklisted")
             
             return is_blacklisted
             

@@ -32,8 +32,6 @@ class UserCRUD:
                 self.logger.error("ユーザーIDが必要です")
                 raise InvalidParameterError("id", id, "ユーザーIDが必要です")
             
-            self.logger.info(f"Retrieving user by id: {id}")
-            
             # データベース接続チェック
             if not db.is_active:
                 self.logger.error("Database session is not active")
@@ -43,10 +41,8 @@ class UserCRUD:
             user = result.scalar_one_or_none()
             
             if user:
-                self.logger.info(f"Found user with id: {id}")
                 return user
             else:
-                self.logger.info(f"User with id {id} not found")
                 raise UserNotFoundError(user_id=str(id))
                 
         except UserNotFoundError:
@@ -70,7 +66,6 @@ class UserCRUD:
                 self.logger.error("Username is required and cannot be empty")
                 raise InvalidParameterError("username", username, "ユーザー名が必要です")
             
-            self.logger.info(f"Retrieving user by username: {username}")
             
             # データベース接続チェック
             if not db.is_active:
@@ -81,10 +76,8 @@ class UserCRUD:
             user = result.scalar_one_or_none()
             
             if user:
-                self.logger.info(f"Found user with username: {username}")
                 return user
             else:
-                self.logger.warning(f"User with username {username} not found")
                 raise UserNotFoundError(username=username)
                 
         except UserNotFoundError:
@@ -108,7 +101,6 @@ class UserCRUD:
                 self.logger.error("Username is required and cannot be empty")
                 return None
             
-            self.logger.info(f"Retrieving user by username: {username}")
             
             # データベース接続チェック
             if not db.is_active:
@@ -117,11 +109,6 @@ class UserCRUD:
             
             result = await db.execute(select(User).filter(User.username == username))
             user = result.scalar_one_or_none()
-            
-            if user:
-                self.logger.info(f"Found user with username: {username}")
-            else:
-                self.logger.info(f"User with username {username} not found")
             
             return user
             
@@ -144,7 +131,6 @@ class UserCRUD:
                 self.logger.error(f"Invalid limit parameter: {limit}")
                 raise InvalidParameterError("limit", limit, "limitは1以上1000以下である必要があります")
             
-            self.logger.info(f"Retrieving users (skip={skip}, limit={limit})")
             
             # データベース接続チェック
             if not db.is_active:
