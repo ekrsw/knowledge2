@@ -22,7 +22,7 @@ from app.core.logging import get_request_logger
 from app.crud.user import user_crud
 from app.db.session import get_async_session
 from app.models import User
-from app.schemas import UserCreate, UserRegister, User as UserSchema, TokenResponse, RefreshTokenRequest, LogoutRequest
+from app.schemas import UserCreate, UserRegister, User as UserSchema, TokenResponse, RefreshTokenRequest, LogoutRequest, PasswordUpdate
 
 
 router = APIRouter()
@@ -279,3 +279,53 @@ async def get_current_user_info(
     logger.info(f"ユーザー情報取得リクエスト: ユーザーID={current_user.id}")
     
     return current_user
+
+
+@router.put("/password")
+async def update_password(
+    request: Request,
+    password_data: PasswordUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """認証されたユーザーのパスワードを更新"""
+    logger = get_request_logger(request)
+    logger.info(f"パスワード更新リクエスト: ユーザーID={current_user.id}")
+    
+    try:
+        # 現在のパスワードを検証
+        if not verify_password(password_data.old_password, current_user.hashed_password):
+            logger.warning(f"パスワード更新失敗: ユーザー '{current_user.username}' の現在のパスワードが不正です")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="現在のパスワードが正しくありません"
+            )
+        
+        # 新しいパスワードと現在のパスワードが同じかチェック
+        if verify_password(password_data.new_password, current_user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="新しいパスワードは現在のパスワードと異なる必要があります"
+            )
+        
+        # パスワードを更新
+        from app.core.security import get_password_hash
+        hashed_new_password = get_password_hash(password_data.new_password)
+        
+        await user_crud.update_password(
+            db=db, 
+            user_id=current_user.id, 
+            hashed_password=hashed_new_password
+        )
+        
+        logger.info(f"パスワード更新成功: ユーザー名={current_user.username}")
+        return {"message": "パスワードが正常に更新されました"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"パスワード更新中にエラー: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="パスワード更新中にエラーが発生しました"
+        )

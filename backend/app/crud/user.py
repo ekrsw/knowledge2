@@ -362,6 +362,50 @@ class UserCRUD:
         except Exception as e:
             self.logger.error(f"Unexpected error during authentication for user {username}: {str(e)}")
             raise DatabaseQueryError(f"認証中に予期しないエラーが発生しました: {str(e)}") from e
+    
+    async def update_password(self, db: AsyncSession, user_id: UUID, hashed_password: str) -> bool:
+        """ユーザーのパスワードを更新"""
+        try:
+            # パラメータ検証
+            if not user_id:
+                self.logger.error("User ID is required for password update")
+                raise InvalidParameterError("user_id", user_id, "パスワード更新にはユーザーIDが必要です")
+            
+            if not hashed_password:
+                self.logger.error("Hashed password is required for password update")
+                raise InvalidParameterError("hashed_password", "[HIDDEN]", "パスワード更新にはハッシュ化されたパスワードが必要です")
+            
+            self.logger.info(f"Updating password for user: {user_id}")
+            
+            # データベース接続チェック
+            if not db.is_active:
+                self.logger.error("Database session is not active")
+                raise DatabaseConnectionError("データベースセッションがアクティブではありません")
+            
+            # ユーザー取得（存在チェック）
+            user = await self.get(db, user_id)
+            if not user:
+                self.logger.warning(f"User {user_id} not found for password update")
+                raise UserNotFoundError(user_id=str(user_id))
+            
+            # パスワード更新
+            user.hashed_password = hashed_password
+            await db.flush()
+            
+            self.logger.info(f"Successfully updated password for user {user_id}")
+            return True
+            
+        except (InvalidParameterError, DatabaseConnectionError, UserNotFoundError):
+            raise
+        except IntegrityError as e:
+            self.logger.error(f"Database integrity error updating password for user {user_id}: {str(e)}")
+            raise DatabaseIntegrityError(f"パスワード更新中にデータベース整合性エラーが発生しました: {str(e)}")
+        except SQLAlchemyError as e:
+            self.logger.error(f"Database error updating password for user {user_id}: {str(e)}")
+            raise DatabaseQueryError(f"パスワード更新中にデータベースエラーが発生しました: {str(e)}") from e
+        except Exception as e:
+            self.logger.error(f"Unexpected error updating password for user {user_id}: {str(e)}")
+            raise DatabaseQueryError(f"パスワード更新中に予期しないエラーが発生しました: {str(e)}") from e
 
 
 # シングルトンインスタンス

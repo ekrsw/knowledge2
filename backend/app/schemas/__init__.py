@@ -4,6 +4,7 @@ from .user import (
     UserCreate,
     UserRegister,
     UserUpdate,
+    PasswordUpdate,
     User
 )
 
@@ -43,6 +44,7 @@ __all__ = [
     "UserCreate", 
     "UserRegister",
     "UserUpdate",
+    "PasswordUpdate",
     "User",
     
     # Article schemas

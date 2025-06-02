@@ -25,6 +25,10 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     is_admin: Optional[bool] = None
 
+class PasswordUpdate(BaseModel):
+    old_password: str
+    new_password: str
+
 class User(UserBase):
     id: UUID
     is_admin: bool
