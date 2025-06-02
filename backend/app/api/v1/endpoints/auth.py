@@ -13,11 +13,13 @@ from app.core.security import (
 from app.core.config import settings
 from app.core.exceptions import (
     DatabaseConnectionError,
+    DatabaseIntegrityError,
     DuplicateUsernameError,
     InvalidCredentialsError,
     InvalidParameterError,
-    UserNotFoundError
-    )
+    UserNotFoundError,
+    ValidationError
+)
 from app.core.logging import get_request_logger
 from app.crud.user import user_crud
 from app.db.session import get_async_session
@@ -149,6 +151,30 @@ async def register_user(
         logger.info(f"ユーザー登録成功: ユーザー名={db_user.username}")
         return db_user
         
+    except DuplicateUsernameError as e:
+        logger.warning(f"ユーザー名重複エラー: {e.message}")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=e.message
+        )
+    except ValidationError as e:
+        logger.warning(f"バリデーションエラー: {e.message}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=e.message
+        )
+    except DatabaseConnectionError as e:
+        logger.error(f"データベース接続エラー: {e.message}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="データベースサービスが利用できません"
+        )
+    except DatabaseIntegrityError as e:
+        logger.error(f"データベース整合性エラー: {e.message}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="データの整合性に問題があります"
+        )
     except HTTPException:
         raise
     except Exception as e:
